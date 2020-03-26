@@ -9,6 +9,7 @@
 #include <QScreen>
 #include <QApplication>
 #include <QShortcut>
+#include <FAST/Utility.hpp>
 
 namespace fast {
 
@@ -26,8 +27,10 @@ PipelineEditor::PipelineEditor(std::string filename) {
 
     QVBoxLayout* layout = new QVBoxLayout(this);
 
-    const QFont fixedFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    const QFont fixedFont("UbuntuMono");
     mEditor = new QTextEdit();
+    highlighter = new PipelineHighlighter(mEditor->document());
+    mEditor->setStyleSheet("QTextEdit { background-color: #1e1e1e; color: #dadada; }");
     mEditor->insertPlainText(text.c_str());
     mEditor->setFont(fixedFont);
     layout->addWidget(mEditor);
@@ -70,11 +73,55 @@ PipelineEditor::PipelineEditor(std::string filename) {
 
 void PipelineEditor::save() {
     std::ofstream file(mFilename);
-    std::string text = std::string(mEditor->toPlainText().toUtf8());
+    QString s = mEditor->toPlainText().toUtf8();
+    std::string text = s.toStdString();
     file << text;
     file.close();
     emit saved();
 }
 
+PipelineHighlighter::PipelineHighlighter(QTextDocument* parent)
+    : QSyntaxHighlighter(parent) {
+    HighlightingRule rule;
+
+    keywordFormat.setForeground(QColor("#d8a0df"));
+    keywordFormat.setFontWeight(QFont::Bold);
+    const QString keywordPatterns[] = {
+        QStringLiteral("\\bProcessObject\\b"),
+        QStringLiteral("\\bRenderer\\b"),
+        QStringLiteral("\\bInput\\b"),
+        QStringLiteral("\\bAttribute\\b"),
+        QStringLiteral("\\bView\\b"),
+        QStringLiteral("\\bPipelineName\\b"),
+        QStringLiteral("\\bPipelineDescription\\b"),
+    };
+    for(const QString& pattern : keywordPatterns) {
+        rule.pattern = QRegularExpression(pattern);
+        rule.format = keywordFormat;
+        highlightingRules.append(rule);
+    }
+
+    quotationFormat.setForeground(QColor("#d69d85"));
+    rule.pattern = QRegularExpression(QStringLiteral("\".*\""));
+    rule.format = quotationFormat;
+    highlightingRules.append(rule);
+
+    // Testasd
+    singleLineCommentFormat.setForeground(QColor("#57a64a"));
+    singleLineCommentFormat.setFontItalic(true);
+    rule.pattern = QRegularExpression(QStringLiteral("#[^\n]*"));
+    rule.format = singleLineCommentFormat;
+    highlightingRules.append(rule);
+}
+
+void PipelineHighlighter::highlightBlock(const QString& text) {
+    for(const HighlightingRule& rule : qAsConst(highlightingRules)) {
+        QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
+        while(matchIterator.hasNext()) {
+            QRegularExpressionMatch match = matchIterator.next();
+            setFormat(match.capturedStart(), match.capturedLength(), rule.format);
+        }
+    }
+}
 
 }
