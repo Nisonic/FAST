@@ -21,8 +21,9 @@ ExternalProject_Add(jkqtplotter
         )
 
 if(WIN32)
-  list(APPEND LIBRARIES JKQTCommonSharedLib_Release.lib JKQTPlotterSharedLib_Release.lib JKQTFastPlotterSharedLib_Release.lib)
+  set(JKQT_LIBRARIES JKQTCommonSharedLib_Release.lib JKQTPlotterSharedLib_Release.lib JKQTFastPlotterSharedLib_Release.lib)
 else()
-  list(APPEND LIBRARIES libJKQTCommonSharedLib_Release.so libJKQTPlotterSharedLib_Release.so libJKQTFastPlotterSharedLib_Release.so)
+  set(JKQT_LIBRARIES libJKQTCommonSharedLib_Release.so libJKQTPlotterSharedLib_Release.so libJKQTFastPlotterSharedLib_Release.so)
 endif()
+list(APPEND LIBRARIES ${JKQT_LIBRARIES})
 list(APPEND FAST_EXTERNAL_DEPENDENCIES jkqtplotter)
