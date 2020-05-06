@@ -1,9 +1,11 @@
 #pragma once
 
-#include "SpatialDataObject.hpp"
+#include <FAST/Data/SpatialDataObject.hpp>
+#include <FAST/Data/Access/Access.hpp>
+#include <FAST/Data/Access/ImagePyramidAccess.hpp>
+#include <set>
 
 // Forward declare
-typedef struct _openslide openslide_t;
 
 namespace fast {
 
@@ -17,39 +19,34 @@ class Image;
 class FAST_EXPORT ImagePyramid : public SpatialDataObject {
     FAST_OBJECT(ImagePyramid)
     public:
-
-        typedef struct Patch {
-            std::shared_ptr<uchar> data;
-            int width;
-            int height;
-            int offsetX;
-            int offsetY;
-        } Patch;
-
-        typedef struct Level {
-            int width;
-            int height;
-            int patches;
-        } Level;
-
+        void create(int width, int height, int channels, int levels = -1);
         void create(openslide_t* fileHandle, std::vector<Level> levels);
-        Patch getPatch(std::string tile);
-        Patch getPatch(int level, int patchX, int patchY);
         int getNrOfLevels();
         int getLevelWidth(int level);
         int getLevelHeight(int level);
         int getLevelPatches(int level);
         int getFullWidth();
         int getFullHeight();
-        SharedPointer<Image> getLevelAsImage(int level);
-        SharedPointer<Image> getPatchAsImage(int level, int offsetX, int offsetY, int width, int height);
+        int getNrOfChannels() const;
+        ImagePyramidAccess::pointer getAccess(accessType type);
+        std::set<std::string> getDirtyPatches();
+        void setDirtyPatch(int level, int patchIdX, int patchIdY);
+        void clearDirtyPatches(std::set<std::string> patches);
         void free(ExecutionDevice::pointer device) override;
         void freeAll() override;
         ~ImagePyramid();
     private:
+        ImagePyramid();
         std::vector<Level> m_levels;
 
-        openslide_t* m_fileHandle;
+        openslide_t* m_fileHandle = nullptr;
+
+        int m_channels;
+        bool m_initialized;
+
+        std::set<std::string> m_dirtyPatches;
+        static int m_counter;
+        std::mutex m_dirtyPatchMutex;
 };
 
 }

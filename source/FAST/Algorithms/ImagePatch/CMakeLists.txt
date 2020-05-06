@@ -10,4 +10,6 @@ fast_add_sources(
 fast_add_test_sources(
         Tests.cpp
 )
+fast_add_process_object(PatchGenerator PatchGenerator.hpp)
+fast_add_process_object(PatchStitcher PatchStitcher.hpp)
 endif()
