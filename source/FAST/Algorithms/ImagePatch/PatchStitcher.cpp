@@ -1,4 +1,5 @@
 #include <FAST/Data/Image.hpp>
+#include <FAST/Data/ImagePyramid.hpp>
 #include <FAST/Data/Tensor.hpp>
 #include <FAST/Algorithms/NeuralNetwork/NeuralNetwork.hpp>
 #include "PatchStitcher.hpp"
@@ -42,8 +43,10 @@ void PatchStitcher::execute() {
 
     if(m_outputImage) {
         addOutputData(0, m_outputImage);
-    } else if (m_outputTensor) {
+    } else if(m_outputTensor) {
         addOutputData(0, m_outputTensor);
+    } else if(m_outputImagePyramid) {
+        addOutputData(0, m_outputImagePyramid);
     } else {
         throw Exception("Unexpected event in PatchStitcher");
     }
@@ -107,16 +110,28 @@ void PatchStitcher::processImage(SharedPointer<Image> patch) {
         is3D = false;
     }
 
-    if(!m_outputImage) {
+    if(!m_outputImage && !m_outputImagePyramid) {
         // Create output image
-        m_outputImage = Image::New();
         if(is3D) {
+			m_outputImage = Image::New();
             m_outputImage->create(fullWidth, fullHeight, fullDepth, patch->getDataType(), patch->getNrOfChannels());
         } else {
-            m_outputImage->create(fullWidth, fullHeight, patch->getDataType(), patch->getNrOfChannels());
+            if(fullWidth < 16384 && fullHeight < 16384) {
+				m_outputImage = Image::New();
+                m_outputImage->create(fullWidth, fullHeight, patch->getDataType(), patch->getNrOfChannels());
+            } else {
+                // Large image, create image pyramid instead
+                m_outputImagePyramid = ImagePyramid::New();
+                m_outputImagePyramid->create(fullWidth, fullHeight, patch->getNrOfChannels());
+            }
         }
-        m_outputImage->fill(0);
-        m_outputImage->setSpacing(Vector3f(patchSpacingX, patchSpacingY, patchSpacingZ));
+        if(m_outputImage) {
+            m_outputImage->fill(0);
+            m_outputImage->setSpacing(Vector3f(patchSpacingX, patchSpacingY, patchSpacingZ));
+        } else {
+            //m_outputImagePyramid->fill(0);
+            //m_outputImagePyramid->setSpacing(Vector3f(patchSpacingX, patchSpacingY, patchSpacingZ));
+        }
         try {
             auto transformData = split(patch->getFrameData("original-transform"));
             auto T = AffineTransformation::New();
@@ -124,37 +139,58 @@ void PatchStitcher::processImage(SharedPointer<Image> patch) {
             for(int i = 0; i < 16; ++i)
                 transform.matrix()(i) = std::stof(transformData[i]);
             T->setTransform(transform);
-            m_outputImage->getSceneGraphNode()->setTransformation(T);
+            if(m_outputImage) {
+                m_outputImage->getSceneGraphNode()->setTransformation(T);
+            } else {
+                m_outputImagePyramid->getSceneGraphNode()->setTransformation(T);
+            }
         } catch(Exception &e) {
 
         }
     }
 
     auto device = std::dynamic_pointer_cast<OpenCLDevice>(getMainDevice());
-    auto patchAccess = patch->getOpenCLImageAccess(ACCESS_READ, device);
 
     if(fullDepth == 1) {
-        cl::Program program = getOpenCLProgram(device, "2D");
-        const int startX = std::stoi(patch->getFrameData("patchid-x")) * std::stoi(patch->getFrameData("patch-width"));
-        const int startY = std::stoi(patch->getFrameData("patchid-y")) * std::stoi(patch->getFrameData("patch-height"));
-        const int endX = startX + patch->getWidth();
-        const int endY = startY + patch->getHeight();
-        reportInfo() << "Stitching " << patch->getFrameData("patchid-x") << " " << patch->getFrameData("patchid-y")
-                     << reportEnd();
+		const int startX = std::stoi(patch->getFrameData("patchid-x")) * std::stoi(patch->getFrameData("patch-width"));
+		const int startY = std::stoi(patch->getFrameData("patchid-y")) * std::stoi(patch->getFrameData("patch-height"));
+		const int endX = startX + patch->getWidth();
+		const int endY = startY + patch->getHeight();
+		reportInfo() << "Stitching " << patch->getFrameData("patchid-x") << " " << patch->getFrameData("patchid-y")
+			<< reportEnd();
+        if(m_outputImage) {
+            cl::Program program = getOpenCLProgram(device, "2D");
 
-        auto outputAccess = m_outputImage->getOpenCLImageAccess(ACCESS_READ_WRITE, device);
+			auto patchAccess = patch->getOpenCLImageAccess(ACCESS_READ, device);
+            auto outputAccess = m_outputImage->getOpenCLImageAccess(ACCESS_READ_WRITE, device);
 
-        cl::Kernel kernel(program, "applyPatch2D");
-        kernel.setArg(0, *patchAccess->get2DImage());
-        kernel.setArg(1, *outputAccess->get2DImage());
-        kernel.setArg(2, startX);
-        kernel.setArg(3, startY);
-        device->getCommandQueue().enqueueNDRangeKernel(
+            cl::Kernel kernel(program, "applyPatch2D");
+            kernel.setArg(0, *patchAccess->get2DImage());
+            kernel.setArg(1, *outputAccess->get2DImage());
+            kernel.setArg(2, startX);
+            kernel.setArg(3, startY);
+            device->getCommandQueue().enqueueNDRangeKernel(
                 kernel,
                 cl::NullRange,
                 cl::NDRange(patch->getWidth(), patch->getHeight()),
                 cl::NullRange
-        );
+            );
+        } else {
+            enableRuntimeMeasurements();
+            // Image pyramid, do it on CPU TODO: optimize somehow?
+            auto outputAccess = m_outputImagePyramid->getAccess(ACCESS_READ_WRITE);
+            auto patchAccess = patch->getImageAccess(ACCESS_READ);
+            mRuntimeManager->startRegularTimer("copy patch");
+            const int maxY = std::min(endY, fullHeight);
+            const int maxX = std::min(endX, fullWidth);
+            for(int y = startY; y < maxY; ++y) {
+                for(int x = startX; x < maxX; ++x) {
+                    outputAccess->setScalarFast(x, y, 0, patchAccess->getScalarFast<uchar>(Vector2i(x - startX, y - startY)));
+                }
+            }
+            mRuntimeManager->stopRegularTimer("copy patch");
+            mRuntimeManager->getTiming("copy patch")->print();
+        }
     } else {
         // 3D
         const int startX = 0;
@@ -163,6 +199,7 @@ void PatchStitcher::processImage(SharedPointer<Image> patch) {
         const int endX = startX + patch->getWidth();
         const int endY = startY + patch->getHeight();
         reportInfo() << "Stitching " << startZ << reportEnd();
+		auto patchAccess = patch->getOpenCLImageAccess(ACCESS_READ, device);
 
         if(device->isWritingTo3DTexturesSupported()) {
             auto outputAccess = m_outputImage->getOpenCLImageAccess(ACCESS_READ_WRITE, device);

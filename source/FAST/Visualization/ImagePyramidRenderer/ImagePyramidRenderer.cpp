@@ -144,10 +144,12 @@ void ImagePyramidRenderer::draw(Matrix4f perspectiveMatrix, Matrix4f viewingMatr
                 int level = std::stoi(parts[0]);
                 int tile_x = std::stoi(parts[1]);
                 int tile_y = std::stoi(parts[2]);
-                std::cout << "Creating texture for tile " << tile_x << " " << tile_y << " at level " << level << std::endl;
-                auto tile = m_input->getPatch(level, tile_x, tile_y);
-                std::cout << "Done get patch" << std::endl;
-                std::cout << "Creating GL texture.." << std::endl;
+                //std::cout << "Creating texture for tile " << tile_x << " " << tile_y << " at level " << level << std::endl;
+                ImagePyramidPatch tile;
+                {
+                    auto access = m_input->getAccess(ACCESS_READ);
+                    tile = access->getPatch(level, tile_x, tile_y);
+                }
                 // Copy data from CPU to GL texture
                 GLuint textureID;
                 glGenTextures(1, &textureID);
@@ -161,14 +163,16 @@ void ImagePyramidRenderer::draw(Matrix4f perspectiveMatrix, Matrix4f viewingMatr
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
                 // WSI data from openslide is stored as ARGB, need to handle this here: BGRA and reverse
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tile.width, tile.height, 0, GL_BGRA, GL_UNSIGNED_BYTE,
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA, tile.width, tile.height, 0, GL_BGRA, GL_UNSIGNED_BYTE,
                              tile.data.get());
+                GLint compressedImageSize = 0;
+                glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_COMPRESSED_IMAGE_SIZE, &compressedImageSize);
                 glBindTexture(GL_TEXTURE_2D, 0);
                 glFinish();
 
                 mTexturesToRender[tileID] = textureID;
-                memoryUsage += 4 * tile.width*tile.height;
-                std::cout << "Texture cache in ImagePyramidRenderer using " << (float)memoryUsage / (1024 * 1024) << " MB" << std::endl;
+                memoryUsage += compressedImageSize;
+                //std::cout << "Texture cache in ImagePyramidRenderer using " << (float)memoryUsage / (1024 * 1024) << " MB" << std::endl;
             }
         });
     }
@@ -194,15 +198,23 @@ void ImagePyramidRenderer::draw(Matrix4f perspectiveMatrix, Matrix4f viewingMatr
         levelToUse = m_input->getNrOfLevels()-1;
     if(levelToUse < 0)
         levelToUse = 0;
+    //std::cout << "Current view size: " << width << " " << height << ", level size: " << m_input->getLevelWidth(levelToUse) << " " << m_input->getLevelHeight(levelToUse) << " viewport: " << m_view->width() << " " << m_view->height() << std::endl;
     if(m_currentLevel != levelToUse) {
         // Level change, clear cache
-        std::cout << "=========== CLEARING QUEUE with size" << m_tileQueue.size() << std::endl;
         std::lock_guard<std::mutex> lock(m_tileQueueMutex);
         m_tileQueue.clear();
     }
     m_currentLevel = levelToUse;
     //std::cout << "Level to use: " << levelToUse << std::endl;
     //std::cout << "Levels total:" << m_input->getNrOfLevels() << std::endl;
+
+    // Clear dirty patches
+    /*
+    for(auto&& patch : m_input->getDirtyPatches()) {
+        mTexturesToRender.erase(patch);
+    }
+    m_input->clearDirtyPatches();
+    */
 
     activateShader();
 

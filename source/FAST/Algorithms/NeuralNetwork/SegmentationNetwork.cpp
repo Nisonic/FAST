@@ -5,16 +5,15 @@
 
 namespace fast {
 
-
-    void SegmentationNetwork::loadAttributes() {
-        if (getBooleanAttribute("heatmap_output")) {
-            setHeatmapOutput();
-        } else {
-            setSegmentationOutput();
-        }
-        setThreshold(getFloatAttribute("threshold"));
-        NeuralNetwork::loadAttributes();
-    }
+void SegmentationNetwork::loadAttributes() {
+	if (getBooleanAttribute("heatmap_output")) {
+		setHeatmapOutput();
+	} else {
+		setSegmentationOutput();
+	}
+	setThreshold(getFloatAttribute("threshold"));
+	NeuralNetwork::loadAttributes();
+}
 
 SegmentationNetwork::SegmentationNetwork() {
     createInputPort<Image>(0);
