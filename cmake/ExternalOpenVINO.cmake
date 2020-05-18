@@ -20,6 +20,7 @@ if (CMAKE_BUILD_TYPE)
         set(MKLDNNPLUGIN_DLL MKLDNNPlugind.dll)
         set(MYRIADPLUGIN_DLL myriadPlugind.dll)
         set(NGRAPH_DLL ngraphd.dll)
+		set(TBB_DLL tbb_debug.dll)
     else()
         set(INFERENCE_ENGINE_LIB inference_engine.lib)
         set(INFERENCE_ENGINE_DLL inference_engine.dll)
@@ -27,6 +28,7 @@ if (CMAKE_BUILD_TYPE)
         set(MKLDNNPLUGIN_DLL MKLDNNPlugin.dll)
         set(MYRIADPLUGIN_DLL myriadPlugin.dll)
         set(NGRAPH_DLL ngraph.dll)
+		set(TBB_DLL tbb.dll)
     endif()
 endif()    
 
@@ -65,8 +67,8 @@ ExternalProject_Add(OpenVINO
             ${CMAKE_COMMAND} -E copy ${FAST_EXTERNAL_BUILD_DIR}/OpenVINO/src/OpenVINO/bin/intel64/${CMAKE_BUILD_TYPE}/${MKLDNNPLUGIN_DLL} ${FAST_EXTERNAL_INSTALL_DIR}/bin/ COMMAND
             ${CMAKE_COMMAND} -E copy ${FAST_EXTERNAL_BUILD_DIR}/OpenVINO/src/OpenVINO/bin/intel64/${CMAKE_BUILD_TYPE}/${MYRIADPLUGIN_DLL} ${FAST_EXTERNAL_INSTALL_DIR}/bin/ COMMAND
             ${CMAKE_COMMAND} -E copy ${FAST_EXTERNAL_BUILD_DIR}/OpenVINO/src/OpenVINO/bin/intel64/${CMAKE_BUILD_TYPE}/${NGRAPH_DLL} ${FAST_EXTERNAL_INSTALL_DIR}/bin/ COMMAND
+            ${CMAKE_COMMAND} -E copy ${FAST_EXTERNAL_BUILD_DIR}/OpenVINO/src/OpenVINO/inference-engine/temp/tbb/bin/${TBB_DLL} ${FAST_EXTERNAL_INSTALL_DIR}/bin/ COMMAND
             ${CMAKE_COMMAND} -E copy ${FAST_EXTERNAL_BUILD_DIR}/OpenVINO/src/OpenVINO/bin/intel64/${CMAKE_BUILD_TYPE}/plugins.xml ${FAST_EXTERNAL_INSTALL_DIR}/bin/ COMMAND
-            ${CMAKE_COMMAND} -E copy ${FAST_EXTERNAL_BUILD_DIR}/OpenVINO/src/OpenVINO/inference-engine/temp/tbb/bin/tbb.dll ${FAST_EXTERNAL_INSTALL_DIR}/bin/ COMMAND
             ${CMAKE_COMMAND} -E copy_directory ${FAST_EXTERNAL_BUILD_DIR}/OpenVINO/src/OpenVINO/inference-engine/include/ ${FAST_EXTERNAL_INSTALL_DIR}/include/openvino/
         )
 else()
