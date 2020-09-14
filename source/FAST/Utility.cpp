@@ -699,8 +699,8 @@ bool isDir(const std::string& path) {
 
 std::string join(std::string path) {
     // Remove all trailing /
-    while(path[path.size()-2] == '/')
-        path.substr(0, path.size()-1);
+    while(path[path.size()-1] == '/')
+        path = path.substr(0, path.size()-1);
     return path;
 }
 
